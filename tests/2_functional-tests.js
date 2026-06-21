@@ -1,381 +1,161 @@
-const chaiHttp = require('chai-http');
+'use strict';
+
 const chai = require('chai');
-const assert = chai.assert;
+const chaiHttp = require('chai-http');
 const server = require('../server');
 
+const assert = chai.assert;
 chai.use(chaiHttp);
 
+let bookId;
+
 suite('Functional Tests', function () {
-  const testProject = 'fcc-test-project-' + Date.now();
 
-  test('Create an issue with every field: POST request to /api/issues/{project}', async function () {
-    const res = await chai.request(server)
-      .post('/api/issues/' + testProject)
-      .type('form')
-      .send({
-        issue_title: 'Issue with every field',
-        issue_text: 'This issue has every field',
-        created_by: 'Alejandro',
-        assigned_to: 'freeCodeCamp',
-        status_text: 'In progress'
+  suite('Routing tests', function () {
+
+    suite('POST /api/books with title => create book object/expect book object', function () {
+
+      test('Test POST /api/books with title', function (done) {
+        chai.request(server)
+          .post('/api/books')
+          .send({ title: 'Functional Test Book' })
+          .end(function (err, res) {
+            assert.equal(res.status, 200);
+            assert.isObject(res.body);
+            assert.property(res.body, 'title');
+            assert.property(res.body, '_id');
+            assert.equal(res.body.title, 'Functional Test Book');
+            bookId = res.body._id;
+            done();
+          });
       });
 
-    assert.equal(res.status, 200);
-    assert.isObject(res.body);
-    assert.equal(res.body.issue_title, 'Issue with every field');
-    assert.equal(res.body.issue_text, 'This issue has every field');
-    assert.equal(res.body.created_by, 'Alejandro');
-    assert.equal(res.body.assigned_to, 'freeCodeCamp');
-    assert.equal(res.body.status_text, 'In progress');
-    assert.isTrue(res.body.open);
-    assert.property(res.body, 'created_on');
-    assert.property(res.body, 'updated_on');
-    assert.property(res.body, '_id');
-  });
-
-  test('Create an issue with only required fields: POST request to /api/issues/{project}', async function () {
-    const res = await chai.request(server)
-      .post('/api/issues/' + testProject)
-      .type('form')
-      .send({
-        issue_title: 'Only required fields',
-        issue_text: 'This issue only has required fields',
-        created_by: 'Alejandro'
+      test('Test POST /api/books with no title given', function (done) {
+        chai.request(server)
+          .post('/api/books')
+          .send({})
+          .end(function (err, res) {
+            assert.equal(res.status, 200);
+            assert.equal(res.text, 'missing required field title');
+            done();
+          });
       });
 
-    assert.equal(res.status, 200);
-    assert.isObject(res.body);
-    assert.equal(res.body.issue_title, 'Only required fields');
-    assert.equal(res.body.issue_text, 'This issue only has required fields');
-    assert.equal(res.body.created_by, 'Alejandro');
-    assert.equal(res.body.assigned_to, '');
-    assert.equal(res.body.status_text, '');
-    assert.isTrue(res.body.open);
-    assert.property(res.body, '_id');
-  });
-
-  test('Create an issue with missing required fields: POST request to /api/issues/{project}', async function () {
-    const res = await chai.request(server)
-      .post('/api/issues/' + testProject)
-      .type('form')
-      .send({
-        issue_title: 'Missing fields'
-      });
-
-    assert.equal(res.status, 200);
-    assert.deepEqual(res.body, {
-      error: 'required field(s) missing'
-    });
-  });
-
-  test('View issues on a project: GET request to /api/issues/{project}', async function () {
-    const project = 'get-project-' + Date.now();
-
-    await chai.request(server)
-      .post('/api/issues/' + project)
-      .type('form')
-      .send({
-        issue_title: 'First issue',
-        issue_text: 'Text 1',
-        created_by: 'User 1'
-      });
-
-    await chai.request(server)
-      .post('/api/issues/' + project)
-      .type('form')
-      .send({
-        issue_title: 'Second issue',
-        issue_text: 'Text 2',
-        created_by: 'User 2'
-      });
-
-    const res = await chai.request(server)
-      .get('/api/issues/' + project);
-
-    assert.equal(res.status, 200);
-    assert.isArray(res.body);
-    assert.lengthOf(res.body, 2);
-    assert.property(res.body[0], 'issue_title');
-    assert.property(res.body[0], 'issue_text');
-    assert.property(res.body[0], 'created_by');
-    assert.property(res.body[0], 'assigned_to');
-    assert.property(res.body[0], 'status_text');
-    assert.property(res.body[0], 'open');
-    assert.property(res.body[0], 'created_on');
-    assert.property(res.body[0], 'updated_on');
-    assert.property(res.body[0], '_id');
-  });
-
-  test('View issues on a project with one filter: GET request to /api/issues/{project}', async function () {
-    const project = 'one-filter-project-' + Date.now();
-
-    await chai.request(server)
-      .post('/api/issues/' + project)
-      .type('form')
-      .send({
-        issue_title: 'Filter issue 1',
-        issue_text: 'Text',
-        created_by: 'Alice'
-      });
-
-    await chai.request(server)
-      .post('/api/issues/' + project)
-      .type('form')
-      .send({
-        issue_title: 'Filter issue 2',
-        issue_text: 'Text',
-        created_by: 'Alice'
-      });
-
-    await chai.request(server)
-      .post('/api/issues/' + project)
-      .type('form')
-      .send({
-        issue_title: 'Filter issue 3',
-        issue_text: 'Text',
-        created_by: 'Bob'
-      });
-
-    const res = await chai.request(server)
-      .get('/api/issues/' + project)
-      .query({ created_by: 'Alice' });
-
-    assert.equal(res.status, 200);
-    assert.isArray(res.body);
-    assert.lengthOf(res.body, 2);
-    assert.equal(res.body[0].created_by, 'Alice');
-    assert.equal(res.body[1].created_by, 'Alice');
-  });
-
-  test('View issues on a project with multiple filters: GET request to /api/issues/{project}', async function () {
-    const project = 'multiple-filter-project-' + Date.now();
-
-    await chai.request(server)
-      .post('/api/issues/' + project)
-      .type('form')
-      .send({
-        issue_title: 'Multi filter 1',
-        issue_text: 'Text',
-        created_by: 'Alice',
-        assigned_to: 'Bob'
-      });
-
-    await chai.request(server)
-      .post('/api/issues/' + project)
-      .type('form')
-      .send({
-        issue_title: 'Multi filter 2',
-        issue_text: 'Text',
-        created_by: 'Alice',
-        assigned_to: 'Bob'
-      });
-
-    await chai.request(server)
-      .post('/api/issues/' + project)
-      .type('form')
-      .send({
-        issue_title: 'Multi filter 3',
-        issue_text: 'Text',
-        created_by: 'Alice',
-        assigned_to: 'Eric'
-      });
-
-    const res = await chai.request(server)
-      .get('/api/issues/' + project)
-      .query({
-        created_by: 'Alice',
-        assigned_to: 'Bob'
-      });
-
-    assert.equal(res.status, 200);
-    assert.isArray(res.body);
-    assert.lengthOf(res.body, 2);
-    assert.equal(res.body[0].created_by, 'Alice');
-    assert.equal(res.body[0].assigned_to, 'Bob');
-  });
-
-  test('Update one field on an issue: PUT request to /api/issues/{project}', async function () {
-    const createRes = await chai.request(server)
-      .post('/api/issues/' + testProject)
-      .type('form')
-      .send({
-        issue_title: 'Update one field',
-        issue_text: 'Old text',
-        created_by: 'Alejandro'
-      });
-
-    const id = createRes.body._id;
-
-    const updateRes = await chai.request(server)
-      .put('/api/issues/' + testProject)
-      .type('form')
-      .send({
-        _id: id,
-        issue_text: 'New text'
-      });
-
-    assert.equal(updateRes.status, 200);
-    assert.deepEqual(updateRes.body, {
-      result: 'successfully updated',
-      _id: id
     });
 
-    const getRes = await chai.request(server)
-      .get('/api/issues/' + testProject)
-      .query({ _id: id });
+    suite('GET /api/books => array of books', function () {
 
-    assert.equal(getRes.body[0].issue_text, 'New text');
-    assert.isAbove(
-      Date.parse(getRes.body[0].updated_on),
-      Date.parse(getRes.body[0].created_on)
-    );
-  });
-
-  test('Update multiple fields on an issue: PUT request to /api/issues/{project}', async function () {
-    const createRes = await chai.request(server)
-      .post('/api/issues/' + testProject)
-      .type('form')
-      .send({
-        issue_title: 'Update many fields',
-        issue_text: 'Old text',
-        created_by: 'Alejandro'
+      test('Test GET /api/books', function (done) {
+        chai.request(server)
+          .get('/api/books')
+          .end(function (err, res) {
+            assert.equal(res.status, 200);
+            assert.isArray(res.body);
+            assert.isAtLeast(res.body.length, 1);
+            assert.property(res.body[0], 'title');
+            assert.property(res.body[0], '_id');
+            assert.property(res.body[0], 'commentcount');
+            done();
+          });
       });
 
-    const id = createRes.body._id;
-
-    const updateRes = await chai.request(server)
-      .put('/api/issues/' + testProject)
-      .type('form')
-      .send({
-        _id: id,
-        issue_title: 'Updated title',
-        issue_text: 'Updated text',
-        assigned_to: 'Teacher'
-      });
-
-    assert.equal(updateRes.status, 200);
-    assert.deepEqual(updateRes.body, {
-      result: 'successfully updated',
-      _id: id
     });
 
-    const getRes = await chai.request(server)
-      .get('/api/issues/' + testProject)
-      .query({ _id: id });
+    suite('GET /api/books/[id] => book object with [id]', function () {
 
-    assert.equal(getRes.body[0].issue_title, 'Updated title');
-    assert.equal(getRes.body[0].issue_text, 'Updated text');
-    assert.equal(getRes.body[0].assigned_to, 'Teacher');
-  });
-
-  test('Update an issue with missing _id: PUT request to /api/issues/{project}', async function () {
-    const res = await chai.request(server)
-      .put('/api/issues/' + testProject)
-      .type('form')
-      .send({
-        issue_text: 'Trying to update without id'
+      test('Test GET /api/books/[id] with id not in db', function (done) {
+        chai.request(server)
+          .get('/api/books/5f665eb46e296f6b9b6a504d')
+          .end(function (err, res) {
+            assert.equal(res.status, 200);
+            assert.equal(res.text, 'no book exists');
+            done();
+          });
       });
 
-    assert.equal(res.status, 200);
-    assert.deepEqual(res.body, {
-      error: 'missing _id'
-    });
-  });
-
-  test('Update an issue with no fields to update: PUT request to /api/issues/{project}', async function () {
-    const id = 'bad-id-no-fields';
-
-    const res = await chai.request(server)
-      .put('/api/issues/' + testProject)
-      .type('form')
-      .send({
-        _id: id
+      test('Test GET /api/books/[id] with valid id in db', function (done) {
+        chai.request(server)
+          .get('/api/books/' + bookId)
+          .end(function (err, res) {
+            assert.equal(res.status, 200);
+            assert.isObject(res.body);
+            assert.property(res.body, 'title');
+            assert.property(res.body, '_id');
+            assert.property(res.body, 'comments');
+            assert.isArray(res.body.comments);
+            assert.equal(res.body._id, bookId);
+            done();
+          });
       });
 
-    assert.equal(res.status, 200);
-    assert.deepEqual(res.body, {
-      error: 'no update field(s) sent',
-      _id: id
     });
-  });
 
-  test('Update an issue with an invalid _id: PUT request to /api/issues/{project}', async function () {
-    const id = 'invalid-id-update';
+    suite('POST /api/books/[id] => add comment/expect book object with id', function () {
 
-    const res = await chai.request(server)
-      .put('/api/issues/' + testProject)
-      .type('form')
-      .send({
-        _id: id,
-        issue_text: 'This should not update'
+      test('Test POST /api/books/[id] with comment', function (done) {
+        chai.request(server)
+          .post('/api/books/' + bookId)
+          .send({ comment: 'Functional test comment' })
+          .end(function (err, res) {
+            assert.equal(res.status, 200);
+            assert.isObject(res.body);
+            assert.property(res.body, 'title');
+            assert.property(res.body, '_id');
+            assert.property(res.body, 'comments');
+            assert.isArray(res.body.comments);
+            assert.include(res.body.comments, 'Functional test comment');
+            done();
+          });
       });
 
-    assert.equal(res.status, 200);
-    assert.deepEqual(res.body, {
-      error: 'could not update',
-      _id: id
-    });
-  });
-
-  test('Delete an issue: DELETE request to /api/issues/{project}', async function () {
-    const createRes = await chai.request(server)
-      .post('/api/issues/' + testProject)
-      .type('form')
-      .send({
-        issue_title: 'Delete this issue',
-        issue_text: 'This issue will be deleted',
-        created_by: 'Alejandro'
+      test('Test POST /api/books/[id] without comment field', function (done) {
+        chai.request(server)
+          .post('/api/books/' + bookId)
+          .send({})
+          .end(function (err, res) {
+            assert.equal(res.status, 200);
+            assert.equal(res.text, 'missing required field comment');
+            done();
+          });
       });
 
-    const id = createRes.body._id;
-
-    const deleteRes = await chai.request(server)
-      .delete('/api/issues/' + testProject)
-      .type('form')
-      .send({
-        _id: id
+      test('Test POST /api/books/[id] with comment, id not in db', function (done) {
+        chai.request(server)
+          .post('/api/books/5f665eb46e296f6b9b6a504d')
+          .send({ comment: 'This should fail' })
+          .end(function (err, res) {
+            assert.equal(res.status, 200);
+            assert.equal(res.text, 'no book exists');
+            done();
+          });
       });
 
-    assert.equal(deleteRes.status, 200);
-    assert.deepEqual(deleteRes.body, {
-      result: 'successfully deleted',
-      _id: id
     });
 
-    const getRes = await chai.request(server)
-      .get('/api/issues/' + testProject)
-      .query({ _id: id });
+    suite('DELETE /api/books/[id] => delete book object id', function () {
 
-    assert.isArray(getRes.body);
-    assert.lengthOf(getRes.body, 0);
-  });
-
-  test('Delete an issue with an invalid _id: DELETE request to /api/issues/{project}', async function () {
-    const id = 'invalid-id-delete';
-
-    const res = await chai.request(server)
-      .delete('/api/issues/' + testProject)
-      .type('form')
-      .send({
-        _id: id
+      test('Test DELETE /api/books/[id] with valid id in db', function (done) {
+        chai.request(server)
+          .delete('/api/books/' + bookId)
+          .end(function (err, res) {
+            assert.equal(res.status, 200);
+            assert.equal(res.text, 'delete successful');
+            done();
+          });
       });
 
-    assert.equal(res.status, 200);
-    assert.deepEqual(res.body, {
-      error: 'could not delete',
-      _id: id
+      test('Test DELETE /api/books/[id] with id not in db', function (done) {
+        chai.request(server)
+          .delete('/api/books/5f665eb46e296f6b9b6a504d')
+          .end(function (err, res) {
+            assert.equal(res.status, 200);
+            assert.equal(res.text, 'no book exists');
+            done();
+          });
+      });
+
     });
+
   });
 
-  test('Delete an issue with missing _id: DELETE request to /api/issues/{project}', async function () {
-    const res = await chai.request(server)
-      .delete('/api/issues/' + testProject)
-      .type('form')
-      .send({});
-
-    assert.equal(res.status, 200);
-    assert.deepEqual(res.body, {
-      error: 'missing _id'
-    });
-  });
 });
