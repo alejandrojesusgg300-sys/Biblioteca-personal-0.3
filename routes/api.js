@@ -1,183 +1,133 @@
 'use strict';
 
-const issuesByProject = {};
+require('dotenv').config();
 
-function createId() {
-  return Date.now().toString(16) + Math.random().toString(16).slice(2);
-}
+const mongoose = require('mongoose');
 
-function getProjectIssues(project) {
-  if (!issuesByProject[project]) {
-    issuesByProject[project] = [];
+mongoose.connect(process.env.DB);
+
+const bookSchema = new mongoose.Schema({
+  title: {
+    type: String,
+    required: true
+  },
+  comments: {
+    type: [String],
+    default: []
   }
+});
 
-  return issuesByProject[project];
-}
-
-function hasValue(value) {
-  return value !== undefined && value !== null && value !== '';
-}
-
-function parseOpenValue(value) {
-  if (value === 'true' || value === true) {
-    return true;
-  }
-
-  if (value === 'false' || value === false) {
-    return false;
-  }
-
-  return value;
-}
+const Book = mongoose.models.Book || mongoose.model('Book', bookSchema);
 
 module.exports = function (app) {
-  app.route('/api/issues/:project')
 
-    .get(function (req, res) {
-      const project = req.params.project;
-      const projectIssues = getProjectIssues(project);
-      const filters = req.query;
+  app.route('/api/books')
+    .get(async function (req, res) {
+      try {
+        const books = await Book.find({});
 
-      const filteredIssues = projectIssues.filter(function (issue) {
-        for (let key in filters) {
-          if (String(issue[key]) !== String(filters[key])) {
-            return false;
-          }
-        }
+        const formattedBooks = books.map(book => ({
+          _id: book._id.toString(),
+          title: book.title,
+          commentcount: book.comments.length
+        }));
 
-        return true;
-      });
-
-      res.json(filteredIssues);
+        res.json(formattedBooks);
+      } catch (err) {
+        res.status(500).send('server error');
+      }
     })
 
-    .post(function (req, res) {
-      const project = req.params.project;
-      const projectIssues = getProjectIssues(project);
+    .post(async function (req, res) {
+      try {
+        const title = req.body.title;
 
-      const issue_title = req.body.issue_title;
-      const issue_text = req.body.issue_text;
-      const created_by = req.body.created_by;
-      const assigned_to = req.body.assigned_to || '';
-      const status_text = req.body.status_text || '';
+        if (!title) {
+          return res.send('missing required field title');
+        }
 
-      if (!hasValue(issue_title) || !hasValue(issue_text) || !hasValue(created_by)) {
-        return res.json({ error: 'required field(s) missing' });
+        const newBook = await Book.create({
+          title: title,
+          comments: []
+        });
+
+        res.json({
+          _id: newBook._id.toString(),
+          title: newBook.title
+        });
+      } catch (err) {
+        res.status(500).send('server error');
       }
-
-      const now = new Date().toISOString();
-
-      const newIssue = {
-        issue_title: issue_title,
-        issue_text: issue_text,
-        created_by: created_by,
-        assigned_to: assigned_to,
-        status_text: status_text,
-        open: true,
-        created_on: now,
-        updated_on: now,
-        _id: createId()
-      };
-
-      projectIssues.push(newIssue);
-
-      res.json(newIssue);
     })
 
-    .put(function (req, res) {
-      const project = req.params.project;
-      const projectIssues = getProjectIssues(project);
-
-      const _id = req.body._id;
-
-      if (!hasValue(_id)) {
-        return res.json({ error: 'missing _id' });
+    .delete(async function (req, res) {
+      try {
+        await Book.deleteMany({});
+        res.send('complete delete successful');
+      } catch (err) {
+        res.status(500).send('server error');
       }
-
-      const fieldsAllowed = [
-        'issue_title',
-        'issue_text',
-        'created_by',
-        'assigned_to',
-        'status_text',
-        'open'
-      ];
-
-      const fieldsToUpdate = {};
-
-      fieldsAllowed.forEach(function (field) {
-        if (hasValue(req.body[field])) {
-          fieldsToUpdate[field] = req.body[field];
-        }
-      });
-
-      if (Object.keys(fieldsToUpdate).length === 0) {
-        return res.json({
-          error: 'no update field(s) sent',
-          _id: _id
-        });
-      }
-
-      const issue = projectIssues.find(function (item) {
-        return item._id === _id;
-      });
-
-      if (!issue) {
-        return res.json({
-          error: 'could not update',
-          _id: _id
-        });
-      }
-
-      Object.keys(fieldsToUpdate).forEach(function (field) {
-        if (field === 'open') {
-          issue[field] = parseOpenValue(fieldsToUpdate[field]);
-        } else {
-          issue[field] = fieldsToUpdate[field];
-        }
-      });
-
-      const now = new Date();
-      const createdTime = Date.parse(issue.created_on);
-
-      if (now.getTime() <= createdTime) {
-        issue.updated_on = new Date(createdTime + 1000).toISOString();
-      } else {
-        issue.updated_on = now.toISOString();
-      }
-
-      res.json({
-        result: 'successfully updated',
-        _id: _id
-      });
-    })
-
-    .delete(function (req, res) {
-      const project = req.params.project;
-      const projectIssues = getProjectIssues(project);
-
-      const _id = req.body._id;
-
-      if (!hasValue(_id)) {
-        return res.json({ error: 'missing _id' });
-      }
-
-      const issueIndex = projectIssues.findIndex(function (issue) {
-        return issue._id === _id;
-      });
-
-      if (issueIndex === -1) {
-        return res.json({
-          error: 'could not delete',
-          _id: _id
-        });
-      }
-
-      projectIssues.splice(issueIndex, 1);
-
-      res.json({
-        result: 'successfully deleted',
-        _id: _id
-      });
     });
+
+
+  app.route('/api/books/:id')
+    .get(async function (req, res) {
+      try {
+        const book = await Book.findById(req.params.id);
+
+        if (!book) {
+          return res.send('no book exists');
+        }
+
+        res.json({
+          _id: book._id.toString(),
+          title: book.title,
+          comments: book.comments
+        });
+      } catch (err) {
+        res.send('no book exists');
+      }
+    })
+
+    .post(async function (req, res) {
+      try {
+        const comment = req.body.comment;
+
+        if (!comment) {
+          return res.send('missing required field comment');
+        }
+
+        const book = await Book.findById(req.params.id);
+
+        if (!book) {
+          return res.send('no book exists');
+        }
+
+        book.comments.push(comment);
+        await book.save();
+
+        res.json({
+          _id: book._id.toString(),
+          title: book.title,
+          comments: book.comments
+        });
+      } catch (err) {
+        res.send('no book exists');
+      }
+    })
+
+    .delete(async function (req, res) {
+      try {
+        const deletedBook = await Book.findByIdAndDelete(req.params.id);
+
+        if (!deletedBook) {
+          return res.send('no book exists');
+        }
+
+        res.send('delete successful');
+      } catch (err) {
+        res.send('no book exists');
+      }
+    });
+
 };
